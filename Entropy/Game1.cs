@@ -23,10 +23,34 @@ namespace Entropy
         List<Tank> EnemyTanks = new List<Tank>();
 
 
-        List<Bullet> Bullets = new List<Bullet>();
         Texture2D BulletTexture;
 
         float BulletBaseSpeed = 5f;
+
+        SpriteFont MainFont;
+        SpriteFont GameOverFont;
+
+        int WinCounter = 0;
+
+        Rectangle ArenaRectangle;
+        int ArenaMargin = 50;
+
+        public void ResetGame()
+        {
+            tank = new Tank(TankTexture, new Vector2(100, 100), 0f);
+
+            int enemyCount = r.Next(3, 10);
+
+            SpawnEnemies(enemyCount);
+        }
+
+        public void SpawnEnemies(int counter)
+        {
+            for (int i = 0; i < counter; ++i)
+            {
+                EnemyTanks.Add(new Tank(TankTexture2, new Vector2(r.Next(150, ArenaRectangle.Width), r.Next(150, ArenaRectangle.Height)), (float)(r.NextDouble() * 2 * Math.PI)));
+            }
+        }
 
         public Game1()
         {
@@ -39,6 +63,8 @@ namespace Entropy
         {
             // TODO: Add your initialization logic here
             base.Initialize();
+
+            
         }
 
         protected override void LoadContent()
@@ -50,16 +76,11 @@ namespace Entropy
             TankTexture2 = Content.Load<Texture2D>("Tiles/Tanks/tank2_body");
             BulletTexture = Content.Load<Texture2D>("Tiles/Tanks/tank1_gun");
 
-            tank = new Tank(TankTexture, new Vector2(100, 100), 0f);
+            MainFont = Content.Load<SpriteFont>("MainFont");
+            GameOverFont = Content.Load<SpriteFont>("GameOverFont");
 
-            
-            int enemyCount = r.Next(3, 10);
-
-            for(int i = 0; i < enemyCount; ++i)
-            {
-                EnemyTanks.Add(new Tank(TankTexture2, new Vector2(r.Next(100, 500), r.Next(100, 500)), (float)(r.NextDouble() * 2 * Math.PI)));
-            }
-
+            ArenaRectangle = new Rectangle(ArenaMargin, ArenaMargin, GraphicsDevice.Viewport.Bounds.Width - ArenaMargin * 2, GraphicsDevice.Viewport.Bounds.Height - ArenaMargin * 2);
+            ResetGame();
         }
 
         protected override void Update(GameTime gameTime)
@@ -68,6 +89,15 @@ namespace Entropy
                 Exit();
 
             // TODO: Add your update logic here
+
+            if (!tank.IsAlive())
+                return;
+
+            if(EnemyTanks.Count == 0)
+            {
+                WinCounter++;
+                ResetGame();
+            }
 
             Keys[] pressedKeys = Keyboard.GetState().GetPressedKeys();
 
@@ -91,32 +121,17 @@ namespace Entropy
                 if (pressedKeys[i].Equals(Keys.Space))
                 {
                     //then shoot!
-                    Bullets.Add(new Bullet(BulletTexture, tank.Position, BulletBaseSpeed * tank.GetRotationVector2(), tank.Orientation));
+                    tank.Shoot(BulletTexture, Color.Red, BulletBaseSpeed);
                 }
 
-                if (!GraphicsDevice.Viewport.Bounds.Contains(tank.GetNewPosition(linearDirection, false)))
+                if (!ArenaRectangle.Contains(tank.GetNewPosition(linearDirection, false)))
                     linearDirection = 0;
 
                 tank.ApplySpeed(linearDirection, angularDirection);
             }
 
 
-            List<Bullet> bulletsToRemove = new List<Bullet>();
-
-            foreach(Bullet bullet in Bullets)
-            {
-                bullet.ApplyCurrentVelocity();
-
-                if (bullet.Position.X > GraphicsDevice.Viewport.Width || bullet.Position.X < 0 || bullet.Position.Y > GraphicsDevice.Viewport.Height || bullet.Position.Y < 0)
-                {
-                    bulletsToRemove.Add(bullet);
-                }
-            }
-
-            foreach(Bullet bullet in bulletsToRemove)
-            {
-                Bullets.Remove(bullet);
-            }
+            tank.UpdateBullets(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
 
             //TODO: ENEMY MOTION LOGIC HERE!
@@ -124,9 +139,41 @@ namespace Entropy
             {
                 float linearMult = r.Next(3) - 1;
                 float angularMult = r.Next(3) - 1;
-                if (!GraphicsDevice.Viewport.Bounds.Contains(enemyTank.GetNewPosition(linearMult, false)))
+                if (!ArenaRectangle.Contains(enemyTank.GetNewPosition(linearMult, false)))
                     linearMult = 0;
                 enemyTank.ApplySpeed(linearMult * r.Next(10), angularMult);
+
+
+                //TODO: ENEMY ACTION HERE!
+                if(r.Next(100) < 10)
+                {
+                    enemyTank.Shoot(BulletTexture, Color.Green, BulletBaseSpeed);
+                }
+
+                enemyTank.UpdateBullets(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+            }
+
+
+            foreach (Tank enemyTank in EnemyTanks)
+            {
+                Bullet usedBullet = null;
+
+                foreach (Bullet enemyBullet in enemyTank.Bullets)
+                {
+                    if (tank.DetectHit(enemyBullet.Position, 2))
+                    {
+                        Debug.WriteLine("Player Hit!");
+                        if (!tank.IsAlive())
+                        {
+                            Debug.WriteLine("Player DEAD!");
+                        }
+                        usedBullet = enemyBullet;
+                        break;
+                    }
+                }
+
+                if (usedBullet != null)
+                    enemyTank.Bullets.Remove(usedBullet);
             }
 
             //DAMAGE LOGIC HERE!
@@ -135,18 +182,27 @@ namespace Entropy
 
             foreach (Tank enemyTank in EnemyTanks)
             {
-                foreach (Bullet bullet in Bullets)
+                Bullet usedBullet = null;
+
+                foreach (Bullet bullet in tank.Bullets)
                 {
-                    if(enemyTank.DetectHit(bullet.Position, 101))
+                    if(enemyTank.DetectHit(bullet.Position, 10))
                     {
                         Debug.WriteLine("Enemy Hit!");
                         if(!enemyTank.IsAlive())
                         {
                             deadTanks.Add(enemyTank);
-                            Debug.WriteLine("Enemy DEAD!");
+                            Debug.WriteLine("Enemy DEAD! ");
+                            //TODO: REWARD MECHANICS HERE!
+                            tank.Fuel += r.Next(20);
                         }
+                        usedBullet = bullet;
+                        break;
                     }
                 }
+
+                if (usedBullet != null)
+                    tank.Bullets.Remove(usedBullet);
             }
 
             foreach (Tank deadTank in deadTanks)
@@ -154,7 +210,7 @@ namespace Entropy
                 EnemyTanks.Remove(deadTank);
             }
 
-                base.Update(gameTime);
+            base.Update(gameTime);
         }
 
         protected override void Draw(GameTime gameTime)
@@ -167,16 +223,31 @@ namespace Entropy
 
             tank.Draw(_spriteBatch);
 
-            for (int i = 0; i < Bullets.Count; ++i)
+            for (int i = 0; i < tank.Bullets.Count; ++i)
             {
-                Bullets[i].Draw(_spriteBatch);
+                tank.Bullets[i].Draw(_spriteBatch);
             }
 
             foreach(Tank enemyTank in EnemyTanks)
             {
                 enemyTank.Draw(_spriteBatch);
+                foreach (Bullet enemyBullet in enemyTank.Bullets)
+                {
+                    enemyBullet.Draw(_spriteBatch);
+                }
             }
 
+
+            _spriteBatch.DrawString(MainFont, "HP: " + tank.HP.ToString() + "\nFuel: " + tank.Fuel.ToString(), new Vector2(10, 10), Color.White);
+
+
+            _spriteBatch.DrawString(MainFont, "Wave: " + WinCounter.ToString() + "  Enemies: " + EnemyTanks.Count.ToString(), new Vector2(GraphicsDevice.Viewport.Width / 2, 10), Color.White);
+
+
+            if(!tank.IsAlive())
+            {
+                _spriteBatch.DrawString(MainFont, "GAME OVER", new Vector2(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2), Color.White);
+            }
 
             _spriteBatch.End();
 

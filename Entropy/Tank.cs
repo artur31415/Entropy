@@ -15,8 +15,10 @@ namespace Entropy
         public float LinearSpeed = 2f;
         public float RotationSpeed = (float)Math.PI / 100;
 
-        public int Fuel = 100;
+        public int Fuel = 500;
         public float HP = 100f;
+
+        public List<Bullet> Bullets = new List<Bullet>();
 
         public Tank()
         {
@@ -41,7 +43,12 @@ namespace Entropy
             Orientation += newAngularSpeedMult * RotationSpeed;
 
             //TODO: MAKE FUEL CONSUMPTION BASED ON LINEAR SPEED!
-            Fuel -= 1;
+            int fuelConsumptionTick = 0;
+
+            if (Math.Abs(newLinearSpeedMult) > 0 || Math.Abs(newAngularSpeedMult) > 0)
+                fuelConsumptionTick = 1;
+
+            Fuel -= 1 * fuelConsumptionTick;
         }
 
         public Vector2 GetRotationVector2()
@@ -54,9 +61,14 @@ namespace Entropy
             spriteBatch.Draw(Texture, Position, null, Color.White, Orientation, new Vector2(Texture.Width / 2, Texture.Height / 2), 1, SpriteEffects.None, 0);
         }
 
+        public Rectangle CollisionRectangle()
+        {
+            return new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height);
+        }
+
         public Boolean DetectHit(Vector2 hitPosition, float Damage)
         {
-            if(Texture.Bounds.Contains(hitPosition))
+            if(CollisionRectangle().Contains(hitPosition))
             {
                 HP -= Damage;
                 return true;
@@ -71,6 +83,34 @@ namespace Entropy
                 return true;
             else
                 return false;
+        }
+
+        public void UpdateBullets(int WorldWidth, int WorldHeight)
+        {
+            List<Bullet> bulletsToRemove = new List<Bullet>();
+
+            foreach (Bullet bullet in Bullets)
+            {
+                bullet.ApplyCurrentVelocity();
+
+                if (bullet.Position.X > WorldWidth || bullet.Position.X < 0 || bullet.Position.Y > WorldHeight || bullet.Position.Y < 0)
+                {
+                    bulletsToRemove.Add(bullet);
+                }
+            }
+
+            foreach (Bullet bullet in bulletsToRemove)
+            {
+                Bullets.Remove(bullet);
+            }
+        }
+
+        public Boolean Shoot(Texture2D bulletTexture, Color bulletColor, float bulletBaseSpeed)
+        {
+            Bullets.Add(new Bullet(bulletTexture, bulletColor, Position, bulletBaseSpeed * GetRotationVector2(), Orientation));
+
+            //FIXME: COOLDOWN MECHANICS?
+            return true;
         }
     }
 }

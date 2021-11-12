@@ -14,16 +14,21 @@ namespace Entropy
         public Texture2D Texture;
         public float Orientation = 0f;
 
+        public float BaseSpeed = 5f;
+
+        public Color color;
+
         public Bullet()
         { 
         }
 
-        public Bullet(Texture2D texture, Vector2 position, Vector2 velocity, float orientation)
+        public Bullet(Texture2D texture, Color color, Vector2 position, Vector2 velocity, float orientation)
         {
             Texture = texture;
             Position = position;
             Velocity = velocity;
             Orientation = orientation;
+            this.color = color;
         }
 
         public void ApplyCurrentVelocity()
@@ -33,7 +38,7 @@ namespace Entropy
 
         public void Draw(SpriteBatch spriteBatch)
         {
-            spriteBatch.Draw(Texture, Position, null, Color.Red, Orientation, new Vector2(Texture.Width / 2, Texture.Height / 2), 1, SpriteEffects.None, 0);
+            spriteBatch.Draw(Texture, Position, null, color, Orientation, new Vector2(Texture.Width / 2, Texture.Height / 2), 1, SpriteEffects.None, 0);
         }
     }
 }
