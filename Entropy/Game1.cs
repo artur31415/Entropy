@@ -3,34 +3,30 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Entropy
 {
     public class Game1 : Game
     {
+        Random r = new Random();
+
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
 
-        Texture2D tankTexture;
-        Vector2 tankPosition = new Vector2(200, 200);
-        Point tankSize = new Point(50, 50);
-        int tankSpeed = 3;
+        Tank tank;
+        Texture2D TankTexture;
+        Texture2D TankTexture2;
 
-        float tankOrientation = 0f;
-        float rotationSpeed = (float)Math.PI / 100;
 
-        Boolean IsNewShoot = false;
+        List<Tank> EnemyTanks = new List<Tank>();
 
-        ArrayList Bullets = new ArrayList();
+
+        List<Bullet> Bullets = new List<Bullet>();
         Texture2D BulletTexture;
 
         float BulletBaseSpeed = 5f;
-
-        public void ApplySpeed(Vector2 newLinearSpeed, float newAngularSpeed)
-        {
-            tankPosition = tankPosition + newLinearSpeed;
-            tankOrientation += newAngularSpeed;
-        }
 
         public Game1()
         {
@@ -42,9 +38,6 @@ namespace Entropy
         protected override void Initialize()
         {
             // TODO: Add your initialization logic here
-
-            
-
             base.Initialize();
         }
 
@@ -53,8 +46,20 @@ namespace Entropy
             _spriteBatch = new SpriteBatch(GraphicsDevice);
 
             // TODO: use this.Content to load your game content here
-            tankTexture = Content.Load<Texture2D>("Tiles/Tanks/tank1_body");
+            TankTexture = Content.Load<Texture2D>("Tiles/Tanks/tank1_body");
+            TankTexture2 = Content.Load<Texture2D>("Tiles/Tanks/tank2_body");
             BulletTexture = Content.Load<Texture2D>("Tiles/Tanks/tank1_gun");
+
+            tank = new Tank(TankTexture, new Vector2(100, 100), 0f);
+
+            
+            int enemyCount = r.Next(3, 10);
+
+            for(int i = 0; i < enemyCount; ++i)
+            {
+                EnemyTanks.Add(new Tank(TankTexture2, new Vector2(r.Next(100, 500), r.Next(100, 500)), (float)(r.NextDouble() * 2 * Math.PI)));
+            }
+
         }
 
         protected override void Update(GameTime gameTime)
@@ -69,42 +74,87 @@ namespace Entropy
             for (int i = 0; i < pressedKeys.Length; ++i)
             {
                 Vector2 linearSpeed = new Vector2(0, 0);
-                float angularSpeed = 0f;
-                float dir = 0;
+                float angularDirection = 0f;
+                float linearDirection= 0;
 
 
                 if (pressedKeys[i].Equals(Keys.W))
-                    dir = 1;
+                    linearDirection= 1;
                 else if (pressedKeys[i].Equals(Keys.S))
-                    dir = -1;
+                    linearDirection= -1;
 
                 if (pressedKeys[i].Equals(Keys.E))
-                    angularSpeed = rotationSpeed;
+                    angularDirection = 1;
                 else if (pressedKeys[i].Equals(Keys.Q))
-                    angularSpeed = - rotationSpeed;
+                    angularDirection = - 1;
 
-                if (!IsNewShoot && pressedKeys[i].Equals(Keys.Space))
+                if (pressedKeys[i].Equals(Keys.Space))
                 {
                     //then shoot!
-                    IsNewShoot = true;
-
-                    Bullets.Add(new Bullet(BulletTexture, tankPosition, new Vector2(BulletBaseSpeed * (float)Math.Sin(tankOrientation), -BulletBaseSpeed * (float)Math.Cos(tankOrientation)), tankOrientation));
+                    Bullets.Add(new Bullet(BulletTexture, tank.Position, BulletBaseSpeed * tank.GetRotationVector2(), tank.Orientation));
                 }
 
-                ApplySpeed(new Vector2(dir * (float)Math.Sin(tankOrientation), - dir * (float)Math.Cos(tankOrientation)), angularSpeed);
+                if (!GraphicsDevice.Viewport.Bounds.Contains(tank.GetNewPosition(linearDirection, false)))
+                    linearDirection = 0;
+
+                tank.ApplySpeed(linearDirection, angularDirection);
             }
 
-            if(IsNewShoot)
+
+            List<Bullet> bulletsToRemove = new List<Bullet>();
+
+            foreach(Bullet bullet in Bullets)
             {
-                BulletPosition += BulletVelocity;
+                bullet.ApplyCurrentVelocity();
 
-                if(BulletPosition.X > GraphicsDevice.Viewport.Width || BulletPosition.X < 0 || BulletPosition.Y > GraphicsDevice.Viewport.Height || BulletPosition.Y < 0)
+                if (bullet.Position.X > GraphicsDevice.Viewport.Width || bullet.Position.X < 0 || bullet.Position.Y > GraphicsDevice.Viewport.Height || bullet.Position.Y < 0)
                 {
-                    IsNewShoot = false;
+                    bulletsToRemove.Add(bullet);
                 }
             }
 
-            base.Update(gameTime);
+            foreach(Bullet bullet in bulletsToRemove)
+            {
+                Bullets.Remove(bullet);
+            }
+
+
+            //TODO: ENEMY MOTION LOGIC HERE!
+            foreach(Tank enemyTank in EnemyTanks)
+            {
+                float linearMult = r.Next(3) - 1;
+                float angularMult = r.Next(3) - 1;
+                if (!GraphicsDevice.Viewport.Bounds.Contains(enemyTank.GetNewPosition(linearMult, false)))
+                    linearMult = 0;
+                enemyTank.ApplySpeed(linearMult * r.Next(10), angularMult);
+            }
+
+            //DAMAGE LOGIC HERE!
+
+            List<Tank> deadTanks = new List<Tank>();
+
+            foreach (Tank enemyTank in EnemyTanks)
+            {
+                foreach (Bullet bullet in Bullets)
+                {
+                    if(enemyTank.DetectHit(bullet.Position, 101))
+                    {
+                        Debug.WriteLine("Enemy Hit!");
+                        if(!enemyTank.IsAlive())
+                        {
+                            deadTanks.Add(enemyTank);
+                            Debug.WriteLine("Enemy DEAD!");
+                        }
+                    }
+                }
+            }
+
+            foreach (Tank deadTank in deadTanks)
+            {
+                EnemyTanks.Remove(deadTank);
+            }
+
+                base.Update(gameTime);
         }
 
         protected override void Draw(GameTime gameTime)
@@ -115,19 +165,16 @@ namespace Entropy
 
             _spriteBatch.Begin(SpriteSortMode.Immediate, null, null, null, null, null, null);
 
-            
+            tank.Draw(_spriteBatch);
 
-            Rectangle tankRect = new Rectangle((int)tankPosition.X, (int)tankPosition.Y, tankSize.X, tankSize.Y);
-
-            _spriteBatch.Draw(tankTexture, tankPosition, null, Color.White, tankOrientation, new Vector2(tankTexture.Width / 2, tankTexture.Height / 2), 1, SpriteEffects.None, 0);
-            //_spriteBatch.Draw(tankTexture, new Rectangle(tankPosition.X, tankPosition.Y, tankSize.X, tankSize.Y), Color.White);
-
-            if(Bullets.Count > 0)
+            for (int i = 0; i < Bullets.Count; ++i)
             {
-                for (int i = 0; i < Bullets.Count; ++i)
-                {
-                    _spriteBatch.Draw(Bullets[i].Texture, BulletPosition, null, Color.Red, BulletOrientation, new Vector2(BulletTexture.Width / 2, BulletTexture.Height / 2), 1, SpriteEffects.None, 0);
-                }
+                Bullets[i].Draw(_spriteBatch);
+            }
+
+            foreach(Tank enemyTank in EnemyTanks)
+            {
+                enemyTank.Draw(_spriteBatch);
             }
 
 

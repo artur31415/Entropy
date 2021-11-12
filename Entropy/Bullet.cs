@@ -9,10 +9,10 @@ namespace Entropy
     class Bullet
     {
 
-        Vector2 Position = new Vector2();
-        Vector2 Velocity = new Vector2();
+        public Vector2 Position = new Vector2();
+        public Vector2 Velocity = new Vector2();
         public Texture2D Texture;
-        float Orientation = 0f;
+        public float Orientation = 0f;
 
         public Bullet()
         { 
@@ -28,7 +28,12 @@ namespace Entropy
 
         public void ApplyCurrentVelocity()
         {
+            Position += Velocity;
+        }
 
+        public void Draw(SpriteBatch spriteBatch)
+        {
+            spriteBatch.Draw(Texture, Position, null, Color.Red, Orientation, new Vector2(Texture.Width / 2, Texture.Height / 2), 1, SpriteEffects.None, 0);
         }
     }
 }
